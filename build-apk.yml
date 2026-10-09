@@ -1,0 +1,51 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform files if missing
+        shell: bash
+        run: |
+          if [ ! -d android ]; then
+            flutter create --platforms=android --project-name step_compete --org com.stepcompete .
+          fi
+      - name: Add activity recognition permission
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          permission = '    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\\n'
+          if "android.permission.ACTIVITY_RECOGNITION" not in s:
+              s = s.replace("<application", permission + "    <application", 1)
+              p.write_text(s)
+          PY
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: step-compete-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
